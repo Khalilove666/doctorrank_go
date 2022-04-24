@@ -115,6 +115,8 @@ func Login() gin.HandlerFunc {
 			Value:    refreshToken,
 			Path:     "/",
 			Domain:   "localhost:3000",
+			MaxAge:   29 * 60,
+			SameSite: http.SameSiteNoneMode,
 			Secure:   true,
 			HttpOnly: true,
 		})
