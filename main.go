@@ -27,7 +27,11 @@ func main() {
 		AllowedHeaders:   []string{"Origin", "Authorization", "Content-Type"},
 	})
 	router.Use(c)
+
 	routes.UserRoute(router)
+	routes.DoctorRoute(router)
+	routes.HospitalRoute(router)
+	routes.ProfessionRoute(router)
 
 	router.Use(middlewares.Authentication())
 
