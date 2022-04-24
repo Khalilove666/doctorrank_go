@@ -38,7 +38,6 @@ func Register() gin.HandlerFunc {
 		}
 
 		count, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
-		defer cancel()
 		if err != nil {
 			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
@@ -51,7 +50,6 @@ func Register() gin.HandlerFunc {
 		}
 
 		count, err = userCollection.CountDocuments(ctx, bson.M{"username": user.Username})
-		defer cancel()
 		if err != nil {
 			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
@@ -88,6 +86,7 @@ func Login() gin.HandlerFunc {
 		var loginUser models.LoginUser
 		var foundUser models.User
 		var loggedUser models.LoggedUser
+		defer cancel()
 
 		if err := c.BindJSON(&loginUser); err != nil {
 			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
@@ -95,14 +94,12 @@ func Login() gin.HandlerFunc {
 		}
 
 		err := userCollection.FindOne(ctx, bson.M{"$or": bson.A{bson.M{"email": loginUser.Login}, bson.M{"username": loginUser.Login}}}).Decode(&foundUser)
-		defer cancel()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: "username or password is incorrect"})
 			return
 		}
 
 		passwordIsValid, msg := VerifyPassword(loginUser.Password, foundUser.Password)
-		defer cancel()
 		if passwordIsValid != true {
 			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
