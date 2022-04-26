@@ -28,7 +28,7 @@ func GenerateToken(email string, firstName string, lastName string, uid string) 
 		LastName:  lastName,
 		Id:        uid,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(1)).Unix(),
+			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(60)).Unix(),
 		},
 	}
 
@@ -45,7 +45,7 @@ func GenerateRefreshToken(id string) (signedRefreshToken string, err error) {
 	refreshClaims := &SignedDetails{
 		Id: id,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(30)).Unix(),
+			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(120)).Unix(),
 		},
 	}
 

@@ -52,6 +52,7 @@ func AllHospitals() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		var hospitals []models.Hospital
+		var filter bson.M
 		defer cancel()
 
 		queries := c.Request.URL.Query()
@@ -59,8 +60,12 @@ func AllHospitals() gin.HandlerFunc {
 		limit, _ := strconv.ParseInt(queries.Get("limit"), 10, 64)
 		term := queries.Get("term")
 		opts := options.FindOptions{Skip: &skip, Limit: &limit}
-		filter := bson.D{{"name", term}}
-		cursor, err := userCollection.Find(ctx, filter, &opts)
+		if term == "" {
+			filter = bson.M{}
+		} else {
+			filter = bson.M{"name": bson.M{"$regex": primitive.Regex{Pattern: term, Options: "i"}}}
+		}
+		cursor, err := hospitalCollection.Find(ctx, filter, &opts)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return

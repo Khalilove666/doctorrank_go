@@ -7,7 +7,7 @@ import (
 )
 
 func DoctorRoute(router *gin.Engine) {
-	router.POST("/doctors", middlewares.Authentication(), controllers.CreateDoctor())
+	router.PUT("/doctors", middlewares.Authentication(), controllers.CreateOrUpdateDoctor())
 	router.GET("/doctors", controllers.AllDoctors())
 	router.GET("/doctors/:user_id", controllers.DoctorById())
 }

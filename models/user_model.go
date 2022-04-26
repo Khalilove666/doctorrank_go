@@ -12,6 +12,7 @@ type User struct {
 	Username  string             `bson:"username" json:"username" validate:"required"`
 	Password  string             `bson:"password" json:"password" validate:"required"`
 	Role      string             `bson:"role" json:"role"`
+	Img       string             `bson:"img" json:"img"`
 	CreatedAt int64              `bson:"created_at" json:"created_at"`
 	UpdatedAt int64              `bson:"updated_at" json:"updated_at"`
 }
@@ -28,6 +29,7 @@ type LoggedUser struct {
 	Email     string             `bson:"email" json:"email" validate:"email,required"`
 	Username  string             `bson:"username" json:"username" validate:"required"`
 	Role      string             `bson:"role" json:"role"`
+	Img       string             `bson:"img" json:"img"`
 	Token     string             `bson:"token" json:"token"'`
 	CreatedAt int64              `bson:"created_at" json:"created_at"`
 	UpdatedAt int64              `bson:"updated_at" json:"updated_at"`
