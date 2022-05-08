@@ -25,13 +25,13 @@ func CreateProfession() gin.HandlerFunc {
 		defer cancel()
 
 		if err := c.BindJSON(&profession); err != nil {
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
 		validationErr := validate.Struct(profession)
 		if validationErr != nil {
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 			return
 		}
 
@@ -40,11 +40,11 @@ func CreateProfession() gin.HandlerFunc {
 		resultInsertionNumber, insertErr := professionCollection.InsertOne(ctx, profession)
 		if insertErr != nil {
 			msg := fmt.Sprintf("Error creating profession item")
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
 
-		c.JSON(http.StatusCreated, responses.UserResponse{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
+		c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
 	}
 }
 
@@ -67,14 +67,14 @@ func AllProfessions() gin.HandlerFunc {
 		}
 		cursor, err := professionCollection.Find(ctx, filter, &opts)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 		if err = cursor.All(ctx, &professions); err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: professions})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: professions})
 	}
 }

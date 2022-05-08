@@ -10,22 +10,35 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-var doctorCollection *mongo.Collection = configs.GetCollection(configs.DB, "doctors")
+var commentCollection *mongo.Collection = configs.GetCollection(configs.DB, "comments")
 
-func CreateOrUpdateDoctor() gin.HandlerFunc {
+func CreateOrUpdateComment() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var comment models.Comment
 		defer cancel()
 
 		userId := c.GetString("_id")
 
-		count, err := doctorCollection.CountDocuments(ctx, bson.M{"user_id": userId})
+		if err := c.BindJSON(&comment); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		validationErr := validate.Struct(comment)
+		if validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+
+		count, err := commentCollection.CountDocuments(ctx, bson.M{"user_id": userId})
 		if err != nil {
 			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
@@ -34,7 +47,7 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 
 		if count > 0 {
 			var doctor bson.M
-			if err := c.BindJSON(&doctor); err != nil {
+			if err := c.BindJSON(&comment); err != nil {
 				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 				return
 			}
@@ -83,74 +96,30 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 	}
 }
 
-func AllDoctors() gin.HandlerFunc {
+func AllComments() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		var doctors []models.CompactDoctor
+		var comments []models.Comment
 		defer cancel()
 
 		queries := c.Request.URL.Query()
 		skip, _ := strconv.ParseInt(queries.Get("skip"), 10, 64)
 		limit, _ := strconv.ParseInt(queries.Get("limit"), 10, 64)
-		term := queries.Get("term")
+		doctorId := queries.Get("doctor_id")
 
-		opts := bson.D{{"$skip", skip}}
-		opts2 := bson.D{{"$limit", limit}}
+		opts := options.FindOptions{Skip: &skip, Limit: &limit}
+		filter := bson.M{"doctor_id": primitive.ObjectIDFromHex(doctorId)}
 
-		projectStage := bson.D{{
-			"$project",
-			bson.M{
-				"full_name": bson.D{{
-					"$concat",
-					[]string{"$last_name", " ", "$first_name"},
-				}},
-				"title":      1,
-				"user_id":    1,
-				"first_name": 1,
-				"last_name":  1,
-				"img":        1,
-				"profession": 1,
-				"hospital":   1,
-			},
-		}}
-		matchStage := bson.D{{
-			"$match",
-			bson.D{{
-				"full_name",
-				bson.M{"$regex": primitive.Regex{Pattern: term, Options: "i"}},
-			}},
-		}}
-
-		cursor, err := doctorCollection.Aggregate(ctx, mongo.Pipeline{projectStage, matchStage, opts, opts2})
-
-		//cursor, err := userCollection.Find(ctx, filter, &opts)
+		cursor, err := commentCollection.Find(ctx, filter, &opts)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
-		if err = cursor.All(ctx, &doctors); err != nil {
+		if err = cursor.All(ctx, &comments); err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: doctors})
-	}
-}
-
-func DoctorById() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		defer cancel()
-		var doctor models.Doctor
-
-		userId := c.Param("user_id")
-		fmt.Println(userId)
-		err := doctorCollection.FindOne(ctx, bson.M{"user_id": userId}).Decode(&doctor)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "unknown user id"})
-			return
-		}
-
-		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: doctor})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: comments})
 	}
 }

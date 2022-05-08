@@ -13,13 +13,13 @@ func Authentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.Request.Header.Get("Authorization")
 		if auth == "" {
-			c.JSON(http.StatusUnauthorized, responses.UserResponse{Status: http.StatusUnauthorized, Message: "error", Data: "No Authorization header provided"})
+			c.JSON(http.StatusUnauthorized, responses.Response{Status: http.StatusUnauthorized, Message: "error", Data: "No Authorization header provided"})
 			c.Abort()
 			return
 		}
 		token := strings.TrimPrefix(auth, "Bearer ")
 		if token == auth {
-			c.JSON(http.StatusUnauthorized, responses.UserResponse{Status: http.StatusUnauthorized, Message: "error", Data: "Could not find bearer token in Authorization header"})
+			c.JSON(http.StatusUnauthorized, responses.Response{Status: http.StatusUnauthorized, Message: "error", Data: "Could not find bearer token in Authorization header"})
 			c.Abort()
 			return
 		}
