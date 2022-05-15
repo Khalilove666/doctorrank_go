@@ -30,6 +30,7 @@ func main() {
 
 	routes.UserRoute(router)
 	routes.DoctorRoute(router)
+	routes.CommentRoute(router)
 	routes.HospitalRoute(router)
 	routes.ProfessionRoute(router)
 
