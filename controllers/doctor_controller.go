@@ -23,7 +23,7 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
 
-		userId := c.GetString("_id")
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
 
 		count, err := doctorCollection.CountDocuments(ctx, bson.M{"user_id": userId})
 		if err != nil {
@@ -86,44 +86,54 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 func AllDoctors() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		var doctors []models.CompactDoctor
+		var doctors []bson.M
 		defer cancel()
 
 		queries := c.Request.URL.Query()
+		term := queries.Get("term")
 		skip, _ := strconv.ParseInt(queries.Get("skip"), 10, 64)
 		limit, _ := strconv.ParseInt(queries.Get("limit"), 10, 64)
-		term := queries.Get("term")
+		if limit <= 0 {
+			limit = 12
+		}
 
-		opts := bson.D{{"$skip", skip}}
-		opts2 := bson.D{{"$limit", limit}}
-
-		projectStage := bson.D{{
-			"$project",
-			bson.M{
-				"full_name": bson.D{{
-					"$concat",
-					[]string{"$last_name", " ", "$first_name"},
-				}},
-				"title":      1,
-				"user_id":    1,
-				"first_name": 1,
-				"last_name":  1,
-				"img":        1,
-				"profession": 1,
-				"hospital":   1,
-			},
-		}}
-		matchStage := bson.D{{
-			"$match",
-			bson.D{{
-				"full_name",
-				bson.M{"$regex": primitive.Regex{Pattern: term, Options: "i"}},
+		pipeline := []bson.M{
+			{"$lookup": bson.M{
+				"from":         "professions",
+				"localField":   "profession_id",
+				"foreignField": "_id",
+				"as":           "profession",
 			}},
-		}}
+			{"$lookup": bson.M{
+				"from":         "hospitals",
+				"localField":   "hospital_id",
+				"foreignField": "_id",
+				"as":           "hospital",
+			}},
+			{"$unwind": "$profession"},
+			{"$unwind": "$hospital"},
+			{"$project": bson.M{
+				"full_name":       bson.M{"$concat": []string{"$first_name", " ", "$last_name"}},
+				"title":           1,
+				"user_id":         1,
+				"first_name":      1,
+				"last_name":       1,
+				"img":             1,
+				"profession._id":  1,
+				"profession.name": 1,
+				"hospital._id":    1,
+				"hospital.name":   1,
+				"hospital.img":    1,
+			}},
+			{"$match": bson.M{
+				"full_name": bson.M{"$regex": primitive.Regex{Pattern: term, Options: "i"}},
+			}},
+			{"$skip": skip},
+			{"$limit": limit},
+		}
 
-		cursor, err := doctorCollection.Aggregate(ctx, mongo.Pipeline{projectStage, matchStage, opts, opts2})
+		cursor, err := doctorCollection.Aggregate(ctx, pipeline)
 
-		//cursor, err := userCollection.Find(ctx, filter, &opts)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
@@ -141,16 +151,74 @@ func DoctorById() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
-		var doctor models.Doctor
+		var doctors []bson.M
+		var rating []bson.M
+		var result bson.M
 
-		userId := c.Param("user_id")
-		fmt.Println(userId)
-		err := doctorCollection.FindOne(ctx, bson.M{"user_id": userId}).Decode(&doctor)
+		doctorId, _ := primitive.ObjectIDFromHex(c.Param("doctorId"))
+
+		pipeline := []bson.M{
+			{"$lookup": bson.M{
+				"from":         "professions",
+				"localField":   "profession_id",
+				"foreignField": "_id",
+				"as":           "profession",
+			}},
+			{"$lookup": bson.M{
+				"from":         "hospitals",
+				"localField":   "hospital_id",
+				"foreignField": "_id",
+				"as":           "hospital",
+			}},
+			{"$unwind": "$profession"},
+			{"$unwind": "$hospital"},
+			{"$project": bson.M{
+				"full_name":       bson.M{"$concat": []string{"$first_name", " ", "$last_name"}},
+				"title":           1,
+				"user_id":         1,
+				"first_name":      1,
+				"last_name":       1,
+				"img":             1,
+				"about":           1,
+				"experience":      1,
+				"education":       1,
+				"contact":         1,
+				"created_at":      1,
+				"updated_at":      1,
+				"profession._id":  1,
+				"profession.name": 1,
+				"hospital._id":    1,
+				"hospital.name":   1,
+				"hospital.img":    1,
+			}},
+			{"$match": bson.M{"_id": doctorId}},
+		}
+		cursor, err := doctorCollection.Aggregate(ctx, pipeline)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "unknown user id"})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		if err = cursor.All(ctx, &doctors); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: doctor})
+		pipeline = []bson.M{
+			{"$group": bson.M{"_id": nil, "rate": bson.M{"$avg": "$rate"}}},
+		}
+		cursor, err = commentCollection.Aggregate(ctx, pipeline)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		if err = cursor.All(ctx, &rating); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		result = doctors[0]
+		result["rate"] = rating[0]["rate"].(float64)
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
 	}
 }

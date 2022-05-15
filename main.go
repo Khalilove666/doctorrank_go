@@ -21,7 +21,7 @@ func main() {
 	configs.ConnectDB()
 
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowedOrigins:   []string{configs.Env("CLIENT")},
 		AllowedMethods:   []string{http.MethodHead, http.MethodOptions, http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
 		AllowCredentials: true,
 		AllowedHeaders:   []string{"Origin", "Authorization", "Content-Type"},
