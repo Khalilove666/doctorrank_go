@@ -27,37 +27,37 @@ func Register() gin.HandlerFunc {
 		var user models.User
 
 		if err := c.BindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
 		validationErr := validate.Struct(user)
 		if validationErr != nil {
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 			return
 		}
 
 		count, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
 		if err != nil {
 			log.Panic(err)
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
 		if count > 0 {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: "this email already exists"})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "this email already exists"})
 			return
 		}
 
 		count, err = userCollection.CountDocuments(ctx, bson.M{"username": user.Username})
 		if err != nil {
 			log.Panic(err)
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
 		if count > 0 {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: "this username already exists"})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "this username already exists"})
 			return
 		}
 
@@ -71,12 +71,12 @@ func Register() gin.HandlerFunc {
 		resultInsertionNumber, insertErr := userCollection.InsertOne(ctx, user)
 		if insertErr != nil {
 			msg := fmt.Sprintf("User item was not created")
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
 		defer cancel()
 
-		c.JSON(http.StatusCreated, responses.UserResponse{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
+		c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
 	}
 }
 
@@ -89,19 +89,19 @@ func Login() gin.HandlerFunc {
 		defer cancel()
 
 		if err := c.BindJSON(&loginUser); err != nil {
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
 		err := userCollection.FindOne(ctx, bson.M{"$or": bson.A{bson.M{"email": loginUser.Login}, bson.M{"username": loginUser.Login}}}).Decode(&foundUser)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: "username or password is incorrect"})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "username or password is incorrect"})
 			return
 		}
 
 		passwordIsValid, msg := VerifyPassword(loginUser.Password, foundUser.Password)
 		if passwordIsValid != true {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
 		refreshToken, _ := helpers.GenerateRefreshToken(foundUser.Id.Hex())
@@ -128,7 +128,7 @@ func Login() gin.HandlerFunc {
 		loggedUser.UpdatedAt = foundUser.UpdatedAt
 		loggedUser.Token = token
 
-		c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: loggedUser})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: loggedUser})
 	}
 }
 func Refresh() gin.HandlerFunc {
@@ -140,30 +140,30 @@ func Refresh() gin.HandlerFunc {
 		cookie, err := c.Cookie("refreshToken")
 		if err != nil {
 			log.Panic(err)
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 		userDetails, msg := helpers.ValidateToken(cookie)
 		if msg != "" {
 			log.Panic(msg)
-			c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: msg})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: msg})
 			return
 		}
 		id, err := primitive.ObjectIDFromHex(userDetails.Id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
 		err = userCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: "incorrect user id"})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "incorrect user id"})
 			return
 		}
 
 		token, _ := helpers.GenerateToken(user.Email, user.FirstName, user.LastName, user.Id.Hex())
 
-		c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: token})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: token})
 	}
 }
 
@@ -182,11 +182,11 @@ func ChangeUserRole() gin.HandlerFunc {
 			},
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: result})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
 	}
 }
 

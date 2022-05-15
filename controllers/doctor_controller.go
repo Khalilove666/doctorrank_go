@@ -28,14 +28,14 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 		count, err := doctorCollection.CountDocuments(ctx, bson.M{"user_id": userId})
 		if err != nil {
 			log.Panic(err)
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
 		if count > 0 {
 			var doctor bson.M
 			if err := c.BindJSON(&doctor); err != nil {
-				c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 				return
 			}
 			updatedAt := time.Now().Unix()
@@ -46,23 +46,23 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 				bson.M{"$set": doctor},
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 				return
 			}
 
-			c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: result})
+			c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
 			return
 
 		} else {
 			var doctor models.Doctor
 			if err := c.BindJSON(&doctor); err != nil {
-				c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 				return
 			}
 
 			validationErr := validate.Struct(doctor)
 			if validationErr != nil {
-				c.JSON(http.StatusBadRequest, responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 				return
 			}
 
@@ -74,11 +74,11 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 			resultInsertionNumber, insertErr := doctorCollection.InsertOne(ctx, doctor)
 			if insertErr != nil {
 				msg := fmt.Sprintf("Error creating doctor item")
-				c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 				return
 			}
 
-			c.JSON(http.StatusCreated, responses.UserResponse{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
+			c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
 		}
 	}
 }
@@ -125,15 +125,15 @@ func AllDoctors() gin.HandlerFunc {
 
 		//cursor, err := userCollection.Find(ctx, filter, &opts)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 		if err = cursor.All(ctx, &doctors); err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: doctors})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: doctors})
 	}
 }
 
@@ -144,12 +144,13 @@ func DoctorById() gin.HandlerFunc {
 		var doctor models.Doctor
 
 		userId := c.Param("user_id")
-		err := userCollection.FindOne(ctx, bson.M{"user_id": userId}).Decode(&doctor)
+		fmt.Println(userId)
+		err := doctorCollection.FindOne(ctx, bson.M{"user_id": userId}).Decode(&doctor)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: "unknown user id"})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "unknown user id"})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.UserResponse{Status: http.StatusOK, Message: "success", Data: doctor})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: doctor})
 	}
 }

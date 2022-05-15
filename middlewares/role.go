@@ -22,11 +22,11 @@ func RoleDoctor() gin.HandlerFunc {
 		objId, _ := primitive.ObjectIDFromHex(id)
 		count, err := userCollection.CountDocuments(ctx, bson.M{"$and": bson.A{bson.M{"_id": objId}, bson.M{"role": "doctor"}}})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 		if count < 1 {
-			c.JSON(http.StatusForbidden, responses.UserResponse{Status: http.StatusForbidden, Message: "error", Data: "only doctors can do this action"})
+			c.JSON(http.StatusForbidden, responses.Response{Status: http.StatusForbidden, Message: "error", Data: "only doctors can do this action"})
 			return
 		}
 
