@@ -83,27 +83,29 @@ func Register() gin.HandlerFunc {
 func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		var loginUser models.LoginUser
+		var loginCredentials models.LoginCredentials
 		var foundUser models.User
-		var loggedUser models.LoggedUser
+		var loggedUser bson.M
 		defer cancel()
 
-		if err := c.BindJSON(&loginUser); err != nil {
+		if err := c.BindJSON(&loginCredentials); err != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
-		err := userCollection.FindOne(ctx, bson.M{"$or": bson.A{bson.M{"email": loginUser.Login}, bson.M{"username": loginUser.Login}}}).Decode(&foundUser)
+		filter := bson.M{"$or": bson.A{bson.M{"email": loginCredentials.Login}, bson.M{"username": loginCredentials.Login}}}
+		err := userCollection.FindOne(ctx, filter).Decode(&foundUser)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "username or password is incorrect"})
 			return
 		}
 
-		passwordIsValid, msg := VerifyPassword(loginUser.Password, foundUser.Password)
+		passwordIsValid, msg := VerifyPassword(loginCredentials.Password, foundUser.Password)
 		if passwordIsValid != true {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
+
 		refreshToken, _ := helpers.GenerateRefreshToken(foundUser.Id.Hex())
 		token, _ := helpers.GenerateToken(foundUser.Email, foundUser.FirstName, foundUser.LastName, foundUser.Id.Hex())
 
@@ -111,26 +113,41 @@ func Login() gin.HandlerFunc {
 			Name:     "refreshToken",
 			Value:    refreshToken,
 			Path:     "/",
-			Domain:   "localhost:3000",
+			Domain:   configs.Env("CLIENT"),
 			MaxAge:   120 * 60,
 			SameSite: http.SameSiteNoneMode,
 			Secure:   true,
 			HttpOnly: true,
 		})
 
-		loggedUser.Id = foundUser.Id
-		loggedUser.FirstName = foundUser.FirstName
-		loggedUser.LastName = foundUser.LastName
-		loggedUser.Email = foundUser.Email
-		loggedUser.Username = foundUser.Username
-		loggedUser.Role = foundUser.Role
-		loggedUser.CreatedAt = foundUser.CreatedAt
-		loggedUser.UpdatedAt = foundUser.UpdatedAt
-		loggedUser.Token = token
+		bsonBytes, _ := bson.Marshal(foundUser)
+		bson.Unmarshal(bsonBytes, &loggedUser)
+		loggedUser["token"] = token
 
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: loggedUser})
 	}
 }
+
+func Logout() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var _, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "refreshToken",
+			Value:    "",
+			Path:     "/",
+			Domain:   configs.Env("CLIENT"),
+			MaxAge:   -1,
+			SameSite: http.SameSiteNoneMode,
+			Secure:   true,
+			HttpOnly: true,
+		})
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: "logged out"})
+	}
+}
+
 func Refresh() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
