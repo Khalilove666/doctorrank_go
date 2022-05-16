@@ -6,6 +6,7 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
+	"strconv"
 	"time"
 )
 
@@ -19,7 +20,9 @@ type SignedDetails struct {
 
 var userCollection *mongo.Collection = configs.GetCollection(configs.DB, "users")
 
-var SECRET_KEY string = configs.Env("SECRET_KEY")
+var SecretKey = configs.Env("SECRET_KEY")
+var TokenMinutes, _ = strconv.ParseInt(configs.Env("TOKEN_MINUTES"), 10, 64)
+var RefreshTokenMinutes, _ = strconv.ParseInt(configs.Env("REFRESH_TOKEN_MINUTES"), 10, 64)
 
 func GenerateToken(email string, firstName string, lastName string, uid string) (signedToken string, err error) {
 	claims := &SignedDetails{
@@ -28,11 +31,11 @@ func GenerateToken(email string, firstName string, lastName string, uid string) 
 		LastName:  lastName,
 		Id:        uid,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(60)).Unix(),
+			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(TokenMinutes)).Unix(),
 		},
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(SECRET_KEY))
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(SecretKey))
 
 	if err != nil {
 		log.Panic(err)
@@ -45,11 +48,11 @@ func GenerateRefreshToken(id string) (signedRefreshToken string, err error) {
 	refreshClaims := &SignedDetails{
 		Id: id,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(120)).Unix(),
+			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(RefreshTokenMinutes)).Unix(),
 		},
 	}
 
-	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString([]byte(SECRET_KEY))
+	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString([]byte(SecretKey))
 
 	if err != nil {
 		log.Panic(err)
@@ -64,7 +67,7 @@ func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
 		signedToken,
 		&SignedDetails{},
 		func(token *jwt.Token) (interface{}, error) {
-			return []byte(SECRET_KEY), nil
+			return []byte(SecretKey), nil
 		},
 	)
 

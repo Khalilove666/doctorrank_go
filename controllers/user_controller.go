@@ -12,7 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"time"
@@ -61,7 +60,7 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		password := HashPassword(user.Password)
+		password := helpers.HashPassword(user.Password)
 		user.Password = password
 
 		user.CreatedAt = time.Now().Unix()
@@ -100,25 +99,26 @@ func Login() gin.HandlerFunc {
 			return
 		}
 
-		passwordIsValid, msg := VerifyPassword(loginCredentials.Password, foundUser.Password)
+		passwordIsValid, msg := helpers.VerifyPassword(loginCredentials.Password, foundUser.Password)
 		if passwordIsValid != true {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
 
-		refreshToken, _ := helpers.GenerateRefreshToken(foundUser.Id.Hex())
 		token, _ := helpers.GenerateToken(foundUser.Email, foundUser.FirstName, foundUser.LastName, foundUser.Id.Hex())
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "refreshToken",
-			Value:    refreshToken,
-			Path:     "/",
-			Domain:   configs.Env("CLIENT"),
-			MaxAge:   120 * 60,
-			SameSite: http.SameSiteNoneMode,
-			Secure:   true,
-			HttpOnly: true,
-		})
+		if loginCredentials.RememberMe {
+			refreshToken, _ := helpers.GenerateRefreshToken(foundUser.Id.Hex())
+			http.SetCookie(c.Writer, &http.Cookie{
+				Name:     "refreshToken",
+				Value:    refreshToken,
+				Path:     "/",
+				Domain:   configs.Env("CLIENT"),
+				MaxAge:   60 * int(helpers.RefreshTokenMinutes),
+				SameSite: http.SameSiteNoneMode,
+				Secure:   true,
+				HttpOnly: true,
+			})
+		}
 
 		bsonBytes, _ := bson.Marshal(foundUser)
 		bson.Unmarshal(bsonBytes, &loggedUser)
@@ -205,23 +205,4 @@ func ChangeUserRole() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
 	}
-}
-
-func HashPassword(password string) string {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	if err != nil {
-		log.Panic(err)
-	}
-	return string(bytes)
-}
-
-func VerifyPassword(userPassword string, providedPassword string) (bool, string) {
-	err := bcrypt.CompareHashAndPassword([]byte(providedPassword), []byte(userPassword))
-	check := true
-	msg := ""
-	if err != nil {
-		msg = fmt.Sprintf("login or passowrd is incorrect")
-		check = false
-	}
-	return check, msg
 }
