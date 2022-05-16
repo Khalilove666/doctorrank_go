@@ -203,21 +203,30 @@ func DoctorById() gin.HandlerFunc {
 			return
 		}
 
-		pipeline = []bson.M{
-			{"$group": bson.M{"_id": nil, "rate": bson.M{"$avg": "$rate"}}},
-		}
-		cursor, err = commentCollection.Aggregate(ctx, pipeline)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
-			return
-		}
-		if err = cursor.All(ctx, &rating); err != nil {
-			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
-			return
-		}
+		if len(doctors) > 0 {
+			pipeline = []bson.M{
+				{"$match": bson.M{"doctor_id": doctorId}},
+				{"$group": bson.M{"_id": doctorId, "rate": bson.M{"$avg": "$rate"}, "reviews": bson.M{"$sum": 1}}},
+			}
+			cursor, err = commentCollection.Aggregate(ctx, pipeline)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+				return
+			}
+			if err = cursor.All(ctx, &rating); err != nil {
+				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+				return
+			}
 
-		result = doctors[0]
-		result["rate"] = rating[0]["rate"].(float64)
+			result = doctors[0]
+			if len(rating) > 0 {
+				result["rate"] = rating[0]["rate"].(float64)
+				result["reviews"] = rating[0]["reviews"].(float64)
+			} else {
+				result["rate"] = -1
+				result["reviews"] = 0
+			}
+		}
 
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
 	}
