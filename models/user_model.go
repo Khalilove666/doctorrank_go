@@ -18,6 +18,7 @@ type User struct {
 }
 
 type LoginCredentials struct {
-	Login    string `bson:"login" json:"login" validate:"required"`
-	Password string `bson:"password" json:"password" validate:"required"`
+	Login      string `bson:"login" json:"login" validate:"required"`
+	Password   string `bson:"password" json:"password" validate:"required"`
+	RememberMe bool   `bson:"remember_me" json:"remember_me"`
 }
