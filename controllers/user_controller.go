@@ -63,6 +63,7 @@ func Register() gin.HandlerFunc {
 		password := helpers.HashPassword(user.Password)
 		user.Password = password
 
+		user.Role = "user"
 		user.CreatedAt = time.Now().Unix()
 		user.UpdatedAt = time.Now().Unix()
 		user.Id = primitive.NewObjectID()
@@ -106,23 +107,27 @@ func Login() gin.HandlerFunc {
 		}
 
 		token, _ := helpers.GenerateToken(foundUser.Email, foundUser.FirstName, foundUser.LastName, foundUser.Id.Hex())
+		refreshToken, _ := helpers.GenerateRefreshToken(foundUser.Id.Hex())
+
+		maxCookieAge := 0
 		if loginCredentials.RememberMe {
-			refreshToken, _ := helpers.GenerateRefreshToken(foundUser.Id.Hex())
-			http.SetCookie(c.Writer, &http.Cookie{
-				Name:     "refreshToken",
-				Value:    refreshToken,
-				Path:     "/",
-				Domain:   configs.Env("CLIENT"),
-				MaxAge:   60 * int(helpers.RefreshTokenMinutes),
-				SameSite: http.SameSiteNoneMode,
-				Secure:   true,
-				HttpOnly: true,
-			})
+			maxCookieAge = 60 * int(helpers.RefreshTokenMinutes)
 		}
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "refreshToken",
+			Value:    refreshToken,
+			Path:     "/",
+			Domain:   configs.Env("DOMAIN"),
+			MaxAge:   maxCookieAge,
+			SameSite: http.SameSiteNoneMode,
+			Secure:   true,
+			HttpOnly: true,
+		})
 
 		bsonBytes, _ := bson.Marshal(foundUser)
 		bson.Unmarshal(bsonBytes, &loggedUser)
 		loggedUser["token"] = token
+		delete(loggedUser, "password")
 
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: loggedUser})
 	}
@@ -137,7 +142,7 @@ func Logout() gin.HandlerFunc {
 			Name:     "refreshToken",
 			Value:    "",
 			Path:     "/",
-			Domain:   configs.Env("CLIENT"),
+			Domain:   configs.Env("DOMAIN"),
 			MaxAge:   -1,
 			SameSite: http.SameSiteNoneMode,
 			Secure:   true,
