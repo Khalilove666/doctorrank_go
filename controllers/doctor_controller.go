@@ -221,7 +221,7 @@ func DoctorById() gin.HandlerFunc {
 			result = doctors[0]
 			if len(rating) > 0 {
 				result["rate"] = rating[0]["rate"].(float64)
-				result["reviews"] = rating[0]["reviews"].(float64)
+				result["reviews"] = rating[0]["reviews"].(int32)
 			} else {
 				result["rate"] = -1
 				result["reviews"] = 0

@@ -84,14 +84,13 @@ func CreateOrUpdateComment() gin.HandlerFunc {
 			comment.CreatedAt = time.Now().Unix()
 			comment.UpdatedAt = time.Now().Unix()
 
-			resultInsertionNumber, insertErr := commentCollection.InsertOne(ctx, comment)
+			_, insertErr := commentCollection.InsertOne(ctx, comment)
 			if insertErr != nil {
 				msg := fmt.Sprintf("Error creating comment item")
 				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 				return
 			}
-
-			c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
+			c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: comment})
 		}
 	}
 }
@@ -130,6 +129,8 @@ func AllComments() gin.HandlerFunc {
 					"doctor_id":       1,
 					"rate":            1,
 					"likes":           1,
+					"created_at":      1,
+					"updated_at":      1,
 					"user._id":        1,
 					"user.first_name": 1,
 					"user.last_name":  1,
