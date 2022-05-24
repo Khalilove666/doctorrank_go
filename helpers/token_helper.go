@@ -4,7 +4,6 @@ import (
 	"doctorrank_go/configs"
 	"fmt"
 	jwt "github.com/dgrijalva/jwt-go"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"strconv"
 	"time"
@@ -17,8 +16,6 @@ type SignedDetails struct {
 	Id        string
 	jwt.StandardClaims
 }
-
-var userCollection *mongo.Collection = configs.GetCollection(configs.DB, "users")
 
 var SecretKey = configs.Env("SECRET_KEY")
 var TokenMinutes, _ = strconv.ParseInt(configs.Env("TOKEN_MINUTES"), 10, 64)
