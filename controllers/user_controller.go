@@ -260,7 +260,7 @@ func UploadAvatar() gin.HandlerFunc {
 			return
 		}
 
-		result, err := userCollection.UpdateOne(
+		_, err = userCollection.UpdateOne(
 			ctx,
 			bson.M{"_id": userObjId},
 			bson.D{
@@ -272,6 +272,6 @@ func UploadAvatar() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: fileName})
 	}
 }

@@ -3,12 +3,15 @@ package helpers
 import (
 	"doctorrank_go/configs"
 	"github.com/h2non/bimg"
+	"strconv"
+	"time"
 )
 
 // ImageProcessing
 func ProcessAndSaveAvatar(buffer []byte, name string, top int, left int, width int, height int) (string, error) {
 	path := configs.Env("FILESYSTEM_PATH")
-	filename := name + ".webp"
+	timeNow := strconv.FormatInt(time.Now().Unix(), 10)
+	filename := name + "_" + timeNow + ".webp"
 
 	converted, err := bimg.NewImage(buffer).Convert(bimg.WEBP)
 	if err != nil {
