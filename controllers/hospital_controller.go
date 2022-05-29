@@ -35,6 +35,16 @@ func CreateHospital() gin.HandlerFunc {
 			return
 		}
 
+		count, err := hospitalCollection.CountDocuments(ctx, bson.M{"name": hospital.Name})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if count > 0 {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "this hospital name already exists"})
+			return
+		}
 		hospital.Id = primitive.NewObjectID()
 
 		resultInsertionNumber, insertErr := hospitalCollection.InsertOne(ctx, hospital)
