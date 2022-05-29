@@ -34,9 +34,18 @@ func CreateProfession() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 			return
 		}
+		count, err := professionCollection.CountDocuments(ctx, bson.M{"name": profession.Name})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if count > 0 {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "this profession name already exists"})
+			return
+		}
 
 		profession.Id = primitive.NewObjectID()
-
 		resultInsertionNumber, insertErr := professionCollection.InsertOne(ctx, profession)
 		if insertErr != nil {
 			msg := fmt.Sprintf("Error creating profession item")

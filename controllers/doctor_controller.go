@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -27,7 +26,6 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 
 		count, err := doctorCollection.CountDocuments(ctx, bson.M{"user_id": userId})
 		if err != nil {
-			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
@@ -38,6 +36,14 @@ func CreateOrUpdateDoctor() gin.HandlerFunc {
 				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 				return
 			}
+
+			if hospitalId, exist := doctor["hospital_id"].(string); exist {
+				doctor["hospital_id"], _ = primitive.ObjectIDFromHex(hospitalId)
+			}
+			if professionId, exist := doctor["profession_id"].(string); exist {
+				doctor["profession_id"], _ = primitive.ObjectIDFromHex(professionId)
+			}
+
 			updatedAt := time.Now().Unix()
 			doctor["updated_at"] = updatedAt
 			result, err := doctorCollection.UpdateOne(
@@ -228,6 +234,66 @@ func DoctorById() gin.HandlerFunc {
 			}
 		}
 
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+	}
+}
+
+func DoctorBySelf() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+		var doctors []bson.M
+		var result bson.M
+
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
+
+		pipeline := []bson.M{
+			{"$lookup": bson.M{
+				"from":         "professions",
+				"localField":   "profession_id",
+				"foreignField": "_id",
+				"as":           "profession",
+			}},
+			{"$lookup": bson.M{
+				"from":         "hospitals",
+				"localField":   "hospital_id",
+				"foreignField": "_id",
+				"as":           "hospital",
+			}},
+			{"$unwind": "$profession"},
+			{"$unwind": "$hospital"},
+			{"$project": bson.M{
+				"title":           1,
+				"user_id":         1,
+				"first_name":      1,
+				"last_name":       1,
+				"img":             1,
+				"about":           1,
+				"experience":      1,
+				"education":       1,
+				"contact":         1,
+				"created_at":      1,
+				"updated_at":      1,
+				"profession._id":  1,
+				"profession.name": 1,
+				"hospital._id":    1,
+				"hospital.name":   1,
+				"hospital.img":    1,
+			}},
+			{"$match": bson.M{"user_id": userId}},
+		}
+		cursor, err := doctorCollection.Aggregate(ctx, pipeline)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		if err = cursor.All(ctx, &doctors); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		if len(doctors) > 0 {
+			result = doctors[0]
+		}
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
 	}
 }
