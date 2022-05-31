@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 	"doctorrank_go/configs"
+	"doctorrank_go/dto"
+	"doctorrank_go/helpers"
 	"doctorrank_go/models"
 	"doctorrank_go/responses"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -21,31 +24,32 @@ var hospitalCollection *mongo.Collection = configs.GetCollection(configs.DB, "ho
 func CreateHospital() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var body dto.HospitalDTO
 		var hospital models.Hospital
 		defer cancel()
 
-		if err := c.BindJSON(&hospital); err != nil {
+		if err := c.BindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
-		validationErr := validate.Struct(hospital)
-		if validationErr != nil {
+		if validationErr := validate.Struct(body); validationErr != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 			return
 		}
 
-		count, err := hospitalCollection.CountDocuments(ctx, bson.M{"name": hospital.Name})
+		count, err := hospitalCollection.CountDocuments(ctx, bson.M{"name": body.Name})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
 		if count > 0 {
-			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "this hospital name already exists"})
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: "this hospital name already exists"})
 			return
 		}
 		hospital.Id = primitive.NewObjectID()
+		hospital.Name = body.Name
 
 		resultInsertionNumber, insertErr := hospitalCollection.InsertOne(ctx, hospital)
 		if insertErr != nil {
@@ -86,5 +90,77 @@ func AllHospitals() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: hospitals})
+	}
+}
+
+func UploadHospitalAvatar() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var image dto.ImageDTO
+		defer cancel()
+
+		hospitalId, _ := primitive.ObjectIDFromHex(c.Param("hospitalId"))
+
+		count, err := hospitalCollection.CountDocuments(ctx, bson.M{"_id": hospitalId})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if count < 1 {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: "unknown hospital id"})
+			return
+		}
+
+		if err := c.Bind(&image); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(image); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+
+		file, err := image.File.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		defer file.Close()
+
+		buffer, err := io.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		fileName, err := helpers.ProcessAndSaveAvatar(
+			buffer,
+			hospitalId.Hex(),
+			helpers.Folders.Hospital,
+			image.Coordinates.Top,
+			image.Coordinates.Left,
+			image.Coordinates.Width,
+			image.Coordinates.Height,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		_, err = hospitalCollection.UpdateOne(
+			ctx,
+			bson.M{"_id": hospitalId},
+			bson.D{
+				{"$set", bson.D{{"img", fileName}}},
+			},
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: fileName})
 	}
 }

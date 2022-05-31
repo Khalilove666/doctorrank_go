@@ -41,7 +41,6 @@ func Register() gin.HandlerFunc {
 
 		count, err := userCollection.CountDocuments(ctx, bson.M{"email": register.Email})
 		if err != nil {
-			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
@@ -53,7 +52,6 @@ func Register() gin.HandlerFunc {
 
 		count, err = userCollection.CountDocuments(ctx, bson.M{"username": register.Username})
 		if err != nil {
-			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
@@ -340,6 +338,7 @@ func UploadAvatar() gin.HandlerFunc {
 		fileName, err := helpers.ProcessAndSaveAvatar(
 			buffer,
 			userId,
+			helpers.Folders.User,
 			image.Coordinates.Top,
 			image.Coordinates.Left,
 			image.Coordinates.Width,

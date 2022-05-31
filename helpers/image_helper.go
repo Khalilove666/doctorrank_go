@@ -7,8 +7,24 @@ import (
 	"time"
 )
 
+var Folders = newFolderRegistry()
+
+func newFolderRegistry() *folderRegistry {
+	return &folderRegistry{
+		User:     "user",
+		Doctor:   "doctor",
+		Hospital: "hospital",
+	}
+}
+
+type folderRegistry struct {
+	User     string
+	Doctor   string
+	Hospital string
+}
+
 // ImageProcessing
-func ProcessAndSaveAvatar(buffer []byte, name string, top int, left int, width int, height int) (string, error) {
+func ProcessAndSaveAvatar(buffer []byte, name string, directory string, top int, left int, width int, height int) (string, error) {
 	path := configs.Env("FILESYSTEM_PATH")
 	timeNow := strconv.FormatInt(time.Now().Unix(), 10)
 	filename := name + "_" + timeNow + ".webp"
@@ -26,12 +42,12 @@ func ProcessAndSaveAvatar(buffer []byte, name string, top int, left int, width i
 		return filename, err
 	}
 
-	writeError := bimg.Write(path+"/user/avatar/"+filename, extracted)
+	writeError := bimg.Write(path+"/"+directory+"/avatar/"+filename, extracted)
 	if writeError != nil {
 		return filename, writeError
 	}
 
-	writeError = bimg.Write(path+"/user/thumbnail/"+filename, processed)
+	writeError = bimg.Write(path+"/"+directory+"/thumbnail/"+filename, processed)
 	if writeError != nil {
 		return filename, writeError
 	}

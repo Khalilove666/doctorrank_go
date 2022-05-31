@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 	"doctorrank_go/configs"
+	"doctorrank_go/dto"
+	"doctorrank_go/helpers"
 	"doctorrank_go/models"
 	"doctorrank_go/responses"
 	"fmt"
@@ -10,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -295,5 +299,75 @@ func DoctorBySelf() gin.HandlerFunc {
 			result = doctors[0]
 		}
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+	}
+}
+
+func UploadDoctorAvatar() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var image dto.ImageDTO
+		var doctor bson.M
+		defer cancel()
+
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
+
+		opts := options.FindOne().SetProjection(bson.M{"_id": 1})
+		if err := doctorCollection.FindOne(ctx, bson.M{"user_id": userId}, opts).Decode(doctor); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		doctorId := doctor["_id"].(primitive.ObjectID)
+
+		if err := c.Bind(&image); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(image); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+
+		file, err := image.File.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		defer file.Close()
+
+		buffer, err := io.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		fileName, err := helpers.ProcessAndSaveAvatar(
+			buffer,
+			doctorId.Hex(),
+			helpers.Folders.Doctor,
+			image.Coordinates.Top,
+			image.Coordinates.Left,
+			image.Coordinates.Width,
+			image.Coordinates.Height,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		_, err = doctorCollection.UpdateOne(
+			ctx,
+			bson.M{"_id": doctorId},
+			bson.D{
+				{"$set", bson.D{{"img", fileName}}},
+			},
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: fileName})
 	}
 }

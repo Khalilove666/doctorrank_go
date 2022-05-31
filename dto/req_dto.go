@@ -37,3 +37,7 @@ type UserUpdateDTO struct {
 	FirstName *string `bson:"first_name,omitempty" json:"first_name,omitempty"`
 	LastName  *string `bson:"last_name,omitempty" json:"last_name,omitempty"`
 }
+
+type HospitalDTO struct {
+	Name string `bson:"name" json:"name" validate:"required"`
+}

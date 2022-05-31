@@ -11,4 +11,6 @@ func DoctorRoute(router *gin.Engine) {
 	router.GET("/doctors", controllers.AllDoctors())
 	router.GET("/doctors/:doctorId", controllers.DoctorById())
 	router.GET("/doctors/self", middlewares.Authentication(), controllers.DoctorBySelf())
+	router.PUT("/doctors/avatar", middlewares.Authentication(), middlewares.RoleDoctor(), controllers.UploadDoctorAvatar())
+
 }
