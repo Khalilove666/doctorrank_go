@@ -3,7 +3,6 @@ package middlewares
 import (
 	"doctorrank_go/helpers"
 	"doctorrank_go/responses"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
@@ -29,7 +28,6 @@ func Authentication() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		fmt.Println(claims)
 		c.Set("email", claims.Email)
 		c.Set("first_name", claims.FirstName)
 		c.Set("last_name", claims.LastName)

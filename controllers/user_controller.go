@@ -26,19 +26,20 @@ func Register() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		var user models.User
+		var register dto.RegisterDTO
 
-		if err := c.BindJSON(&user); err != nil {
+		if err := c.BindJSON(&register); err != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
-		validationErr := validate.Struct(user)
+		validationErr := validate.Struct(register)
 		if validationErr != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 			return
 		}
 
-		count, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
+		count, err := userCollection.CountDocuments(ctx, bson.M{"email": register.Email})
 		if err != nil {
 			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
@@ -50,7 +51,7 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		count, err = userCollection.CountDocuments(ctx, bson.M{"username": user.Username})
+		count, err = userCollection.CountDocuments(ctx, bson.M{"username": register.Username})
 		if err != nil {
 			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
@@ -62,9 +63,11 @@ func Register() gin.HandlerFunc {
 			return
 		}
 
-		password := helpers.HashPassword(user.Password)
-		user.Password = password
-
+		user.FirstName = register.FirstName
+		user.LastName = register.LastName
+		user.Username = register.Username
+		user.Email = register.Email
+		user.Password = helpers.HashPassword(register.Password)
 		user.Role = "user"
 		user.CreatedAt = time.Now().Unix()
 		user.UpdatedAt = time.Now().Unix()
@@ -85,9 +88,9 @@ func Register() gin.HandlerFunc {
 func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		var loginCredentials models.LoginCredentials
+		var loginCredentials dto.LoginDTO
+		var loginRes dto.LoginResDTO
 		var foundUser models.User
-		var loggedUser bson.M
 		defer cancel()
 
 		if err := c.BindJSON(&loginCredentials); err != nil {
@@ -127,11 +130,10 @@ func Login() gin.HandlerFunc {
 		})
 
 		bsonBytes, _ := bson.Marshal(foundUser)
-		bson.Unmarshal(bsonBytes, &loggedUser)
-		loggedUser["token"] = token
-		delete(loggedUser, "password")
+		bson.Unmarshal(bsonBytes, &loginRes)
+		loginRes.Token = token
 
-		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: loggedUser})
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: loginRes})
 	}
 }
 
@@ -211,6 +213,94 @@ func ChangeUserRole() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+	}
+}
+
+func UpdateUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var user dto.UserUpdateDTO
+		defer cancel()
+
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
+
+		if err := c.Bind(&user); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(user); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+		updatedAt := time.Now().Unix()
+		update := bson.M{}
+		update["updated_at"] = updatedAt
+		if user.FirstName != nil {
+			update["first_name"] = user.FirstName
+		}
+		if user.LastName != nil {
+			update["last_name"] = user.LastName
+		}
+
+		updateResult, err := userCollection.UpdateOne(
+			ctx,
+			bson.M{"_id": userId},
+			bson.M{"$set": update},
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: updateResult})
+	}
+}
+
+func ChangePassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var body dto.PasswordDTO
+		var user models.User
+		defer cancel()
+
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
+
+		if err := c.Bind(&body); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(body); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+
+		err := userCollection.FindOne(ctx, bson.M{"_id": userId}).Decode(&user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		passwordIsValid, msg := helpers.VerifyPassword(body.OldPassword, user.Password)
+		if passwordIsValid != true {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+			return
+		}
+
+		newPassword := helpers.HashPassword(body.NewPassword)
+		updatedAt := time.Now().Unix()
+		updateResult, err := userCollection.UpdateOne(
+			ctx,
+			bson.M{"_id": userId},
+			bson.M{"$set": bson.M{"password": newPassword, "updated_at": updatedAt}},
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: updateResult})
 	}
 }
 
