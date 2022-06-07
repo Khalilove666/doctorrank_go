@@ -108,6 +108,98 @@ func AllDoctors() gin.HandlerFunc {
 		}
 
 		pipeline := []bson.M{
+			{
+				"$lookup": bson.M{
+					"from": "comments",
+					"let":  bson.M{"id": "$_id"},
+					"pipeline": []bson.M{
+						{"$match": bson.M{"$expr": bson.M{"$eq": []string{"$doctor_id", "$$id"}}}},
+						{"$group": bson.M{"_id": nil, "value": bson.M{"$avg": "$rate"}, "count": bson.M{"$sum": 1}}},
+						{"$project": bson.M{"_id": 0}},
+					},
+					"as": "rating",
+				},
+			},
+			{
+				"$unwind": bson.M{"path": "$rating", "preserveNullAndEmptyArrays": true},
+			},
+			{
+				"$project": bson.M{
+					"rating": bson.M{"$ifNull": []interface{}{"$rating", bson.M{"value": 0, "count": 0}}},
+				},
+			},
+			{
+				"$group": bson.M{
+					"_id":   nil,
+					"value": bson.M{"$avg": "$rating.value"},
+					"count": bson.M{"$sum": "$rating.count"},
+				},
+			},
+			{
+				"$project": bson.M{"_id": 0, "genAvg": "$value", "genCount": "$count"},
+			},
+			{
+				"$lookup": bson.M{
+					"from":         "doctors",
+					"localField":   "null",
+					"foreignField": "null",
+					"as":           "doctor",
+				},
+			},
+			{
+				"$unwind": bson.M{"path": "$doctor", "preserveNullAndEmptyArrays": true},
+			},
+			{
+				"$lookup": bson.M{
+					"from": "comments",
+					"let":  bson.M{"id": "$doctor._id"},
+					"pipeline": []bson.M{
+						{
+							"$match": bson.M{"$expr": bson.M{"$eq": []string{"$doctor_id", "$$id"}}},
+						},
+						{
+							"$group": bson.M{"_id": nil, "value": bson.M{"$avg": "$rate"}, "count": bson.M{"$sum": 1}},
+						},
+						{"$project": bson.M{"_id": 0}},
+					},
+					"as": "rating",
+				},
+			},
+			{
+				"$unwind": bson.M{"path": "$rating", "preserveNullAndEmptyArrays": true},
+			},
+			{
+				"$project": bson.M{
+					"doctor":   1,
+					"genAvg":   1,
+					"genCount": 1,
+					"rating":   bson.M{"$ifNull": []interface{}{"$rating", bson.M{"value": 0, "count": 0}}},
+				},
+			},
+			{
+				"$project": bson.M{
+					"genAvg":   1,
+					"genCount": 1,
+					"doctor":   1,
+					"rating":   1,
+					"rank": bson.M{
+						"$divide": []bson.M{
+							{
+								"$sum": []bson.M{
+									{"$multiply": []interface{}{"$rating.value", "$rating.count"}},
+									{"$multiply": []interface{}{"$genAvg", "$genCount"}},
+								},
+							},
+							{"$sum": []interface{}{"$genCount", "$rating.count"}},
+						},
+					},
+				},
+			},
+			{
+				"$replaceRoot": bson.M{
+					"newRoot": bson.M{"$mergeObjects": []interface{}{bson.M{"rank": "$rank", "rating": "$rating"}, "$doctor"}},
+				},
+			},
 			{"$lookup": bson.M{
 				"from":         "professions",
 				"localField":   "profession_id",
@@ -122,22 +214,22 @@ func AllDoctors() gin.HandlerFunc {
 			}},
 			{"$unwind": "$profession"},
 			{"$unwind": "$hospital"},
-			{"$project": bson.M{
-				"full_name":       bson.M{"$concat": []string{"$first_name", " ", "$last_name"}},
-				"title":           1,
-				"user_id":         1,
-				"first_name":      1,
-				"last_name":       1,
-				"img":             1,
-				"profession._id":  1,
-				"profession.name": 1,
-				"hospital._id":    1,
-				"hospital.name":   1,
-				"hospital.img":    1,
-			}},
-			{"$match": bson.M{
-				"full_name": bson.M{"$regex": primitive.Regex{Pattern: term, Options: "i"}},
-			}},
+			{
+				"$project": bson.M{
+					"full_name":  bson.M{"$concat": []string{"$first_name", " ", "$last_name"}},
+					"title":      1,
+					"user_id":    1,
+					"first_name": 1,
+					"last_name":  1,
+					"img":        1,
+					"rank":       1,
+					"rating":     1,
+					"profession": 1,
+					"hospital":   1,
+				},
+			},
+			{"$match": bson.M{"full_name": bson.M{"$regex": primitive.Regex{Pattern: term, Options: "i"}}}},
+			{"$sort": bson.M{"rank": -1}},
 			{"$skip": skip},
 			{"$limit": limit},
 		}
