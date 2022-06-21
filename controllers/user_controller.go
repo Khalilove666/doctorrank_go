@@ -14,7 +14,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -27,6 +26,7 @@ func Register() gin.HandlerFunc {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		var user models.User
 		var register dto.RegisterDTO
+		defer cancel()
 
 		if err := c.BindJSON(&register); err != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
@@ -71,15 +71,49 @@ func Register() gin.HandlerFunc {
 		user.UpdatedAt = time.Now().Unix()
 		user.Id = primitive.NewObjectID()
 
+		signedActivationToken, err := helpers.GenerateActivationToken(user.Email)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if err = helpers.SendConfirmationMail(user.FirstName, user.Email, configs.CLIENT+"/activation?activationToken="+signedActivationToken); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
 		resultInsertionNumber, insertErr := userCollection.InsertOne(ctx, user)
 		if insertErr != nil {
-			msg := fmt.Sprintf("User item was not created")
+			msg := fmt.Sprintf("User could not be not created")
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
-		defer cancel()
 
 		c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
+	}
+}
+
+func ActivateProfile() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+		queries := c.Request.URL.Query()
+		activationToken := queries.Get("activationToken")
+		claims, msg := helpers.ValidateToken(activationToken)
+		if msg != "" {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: msg})
+			return
+		}
+
+		filter := bson.M{"email": claims.Email}
+		update := bson.M{"$set": bson.M{"email_confirmed": true}}
+		updateResult, err := userCollection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: updateResult})
 	}
 }
 
@@ -106,6 +140,11 @@ func Login() gin.HandlerFunc {
 		passwordIsValid, msg := helpers.VerifyPassword(loginCredentials.Password, foundUser.Password)
 		if passwordIsValid != true {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+			return
+		}
+
+		if foundUser.EmailConfirmed != true {
+			c.JSON(http.StatusForbidden, responses.Response{Status: http.StatusForbidden, Message: "error", Data: "email not confirmed"})
 			return
 		}
 
@@ -163,13 +202,11 @@ func Refresh() gin.HandlerFunc {
 
 		cookie, err := c.Cookie("refreshToken")
 		if err != nil {
-			log.Panic(err)
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 		userDetails, msg := helpers.ValidateToken(cookie)
 		if msg != "" {
-			log.Panic(msg)
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: msg})
 			return
 		}

@@ -20,6 +20,7 @@ type SignedDetails struct {
 var SecretKey = configs.Env("SECRET_KEY")
 var TokenMinutes, _ = strconv.ParseInt(configs.Env("TOKEN_MINUTES"), 10, 64)
 var RefreshTokenMinutes, _ = strconv.ParseInt(configs.Env("REFRESH_TOKEN_MINUTES"), 10, 64)
+var ActivationLinkMinutes, _ = strconv.ParseInt(configs.Env("REFRESH_TOKEN_MINUTES"), 10, 64)
 
 func GenerateToken(email string, firstName string, lastName string, uid string) (signedToken string, err error) {
 	claims := &SignedDetails{
@@ -59,6 +60,24 @@ func GenerateRefreshToken(id string) (signedRefreshToken string, err error) {
 	return refreshToken, err
 }
 
+func GenerateActivationToken(email string) (signedActivationToken string, err error) {
+	activationClaims := &SignedDetails{
+		Email: email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(ActivationLinkMinutes)).Unix(),
+		},
+	}
+
+	activationToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, activationClaims).SignedString([]byte(SecretKey))
+
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+
+	return activationToken, err
+}
+
 func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
 	token, err := jwt.ParseWithClaims(
 		signedToken,
@@ -76,13 +95,11 @@ func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
 	claims, ok := token.Claims.(*SignedDetails)
 	if !ok {
 		msg = fmt.Sprintf("the token is invalid")
-		msg = err.Error()
 		return
 	}
 
 	if claims.ExpiresAt < time.Now().Local().Unix() {
-		msg = fmt.Sprintf("token is expired")
-		msg = err.Error()
+		msg = fmt.Sprintf("the token is expired")
 		return
 	}
 
