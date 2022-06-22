@@ -11,6 +11,7 @@ func UserRoute(router *gin.Engine) {
 	path := configs.Env("FILESYSTEM_PATH")
 
 	router.POST("/register", controllers.Register())
+	router.POST("/activation", controllers.ActivateProfile())
 	router.POST("/login", controllers.Login())
 	router.POST("/logout", controllers.Logout())
 	router.GET("/refresh", controllers.Refresh())
