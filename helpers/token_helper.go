@@ -60,7 +60,7 @@ func GenerateRefreshToken(id string) (signedRefreshToken string, err error) {
 	return refreshToken, err
 }
 
-func GenerateActivationToken(email string) (signedActivationToken string, err error) {
+func GenerateEmailToken(email string) (signedActivationToken string, err error) {
 	activationClaims := &SignedDetails{
 		Email: email,
 		StandardClaims: jwt.StandardClaims{

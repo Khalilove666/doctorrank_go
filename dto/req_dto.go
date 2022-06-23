@@ -19,7 +19,7 @@ type RegisterDTO struct {
 	LastName  string `bson:"last_name" json:"last_name" validate:"required"`
 	Email     string `bson:"email" json:"email" validate:"email,required"`
 	Username  string `bson:"username" json:"username" validate:"required"`
-	Password  string `bson:"password" json:"password" validate:"required,min=6"`
+	Password  string `bson:"password" json:"password" validate:"required,min=8"`
 }
 
 type LoginDTO struct {
@@ -30,7 +30,11 @@ type LoginDTO struct {
 
 type PasswordDTO struct {
 	OldPassword string `bson:"old_password" json:"old_password" validate:"required"`
-	NewPassword string `bson:"new_password" json:"new_password" validate:"required,min=6"`
+	NewPassword string `bson:"new_password" json:"new_password" validate:"required,min=8"`
+}
+
+type PasswordResetDTO struct {
+	NewPassword string `bson:"new_password" json:"new_password" validate:"required,min=8"`
 }
 
 type UserUpdateDTO struct {
