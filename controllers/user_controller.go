@@ -71,7 +71,7 @@ func Register() gin.HandlerFunc {
 		user.UpdatedAt = time.Now().Unix()
 		user.Id = primitive.NewObjectID()
 
-		signedActivationToken, err := helpers.GenerateActivationToken(user.Email)
+		signedActivationToken, err := helpers.GenerateEmailToken(user.Email)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
@@ -282,6 +282,77 @@ func UpdateUser() gin.HandlerFunc {
 			ctx,
 			bson.M{"_id": userId},
 			bson.M{"$set": update},
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: updateResult})
+	}
+}
+
+func PasswordResetEmail() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var foundUser models.User
+		defer cancel()
+
+		queries := c.Request.URL.Query()
+		login := queries.Get("login")
+
+		filter := bson.M{"$or": bson.A{bson.M{"email": login}, bson.M{"username": login}}}
+		err := userCollection.FindOne(ctx, filter).Decode(&foundUser)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: "user not found"})
+			return
+		}
+
+		signedEmailToken, err := helpers.GenerateEmailToken(foundUser.Email)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if err = helpers.SendPasswordResetEmail(foundUser.Email, configs.CLIENT+"/reset-password?pswResetToken="+signedEmailToken); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: "email sent"})
+	}
+}
+
+func ResetPassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var body dto.PasswordResetDTO
+		defer cancel()
+
+		queries := c.Request.URL.Query()
+		pswResetToken := queries.Get("pswResetToken")
+		claims, msg := helpers.ValidateToken(pswResetToken)
+		if msg != "" {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: msg})
+			return
+		}
+
+		if err := c.Bind(&body); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(body); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+
+		newPassword := helpers.HashPassword(body.NewPassword)
+		updatedAt := time.Now().Unix()
+		updateResult, err := userCollection.UpdateOne(
+			ctx,
+			bson.M{"email": claims.Email},
+			bson.M{"$set": bson.M{"password": newPassword, "updated_at": updatedAt}},
 		)
 
 		if err != nil {

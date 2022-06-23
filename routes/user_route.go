@@ -18,6 +18,8 @@ func UserRoute(router *gin.Engine) {
 	router.PUT("/role", middlewares.Authentication(), controllers.ChangeUserRole())
 	router.PUT("/update", middlewares.Authentication(), controllers.UpdateUser())
 	router.PUT("/password", middlewares.Authentication(), controllers.ChangePassword())
+	router.GET("/password-reset", controllers.PasswordResetEmail())
+	router.POST("/password-reset", controllers.ResetPassword())
 	router.PUT("/avatar", middlewares.Authentication(), controllers.UploadAvatar())
 	router.Static("/user/avatar", path+"/user/avatar/")
 	router.Static("/user/thumbnail", path+"/user/thumbnail/")
