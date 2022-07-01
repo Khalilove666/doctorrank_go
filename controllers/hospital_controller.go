@@ -51,14 +51,14 @@ func CreateHospital() gin.HandlerFunc {
 		hospital.Id = primitive.NewObjectID()
 		hospital.Name = body.Name
 
-		resultInsertionNumber, insertErr := hospitalCollection.InsertOne(ctx, hospital)
+		_, insertErr := hospitalCollection.InsertOne(ctx, hospital)
 		if insertErr != nil {
 			msg := fmt.Sprintf("Error creating hospital item")
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
 			return
 		}
 
-		c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
+		c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: hospital.Id})
 	}
 }
 

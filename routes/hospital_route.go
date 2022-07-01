@@ -9,6 +9,6 @@ import (
 func HospitalRoute(router *gin.Engine) {
 	router.POST("/hospitals", middlewares.Authentication(), middlewares.RoleDoctor(), controllers.CreateHospital())
 	router.GET("/hospitals", controllers.AllHospitals())
-	router.PUT("/hospitals/avatar", middlewares.Authentication(), middlewares.RoleDoctor(), controllers.UploadHospitalAvatar())
+	router.PUT("/hospitals/:hospitalId/avatar", middlewares.Authentication(), middlewares.RoleDoctor(), controllers.UploadHospitalAvatar())
 
 }

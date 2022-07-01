@@ -231,58 +231,88 @@ func Refresh() gin.HandlerFunc {
 func ChangeUserRole() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var user models.User
+		var doctor models.Doctor
 		defer cancel()
 		id := c.GetString("_id")
 		objId, _ := primitive.ObjectIDFromHex(id)
 
-		result, err := userCollection.UpdateOne(
+		_, err := userCollection.UpdateOne(
 			ctx,
 			bson.M{"_id": objId},
-			bson.D{
-				{"$set", bson.D{{"role", "doctor"}}},
-			},
+			bson.M{"$set": bson.D{{"role", "doctor"}}},
 		)
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+		filter := bson.M{"$or": bson.A{bson.M{"_id": objId}}}
+		if err := userCollection.FindOne(ctx, filter).Decode(&user); err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		doctor.Id = primitive.NewObjectID()
+		doctor.UserId = objId
+		doctor.CreatedAt = time.Now().Unix()
+		doctor.UpdatedAt = time.Now().Unix()
+		doctor.FirstName = user.FirstName
+		doctor.LastName = user.LastName
+		doctor.Title = "Dr."
+
+		resultInsertionNumber, insertErr := doctorCollection.InsertOne(ctx, doctor)
+		if insertErr != nil {
+			msg := fmt.Sprintf("Error creating doctor item")
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
+			return
+		}
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: resultInsertionNumber})
 	}
 }
 
 func UpdateUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		var user dto.UserUpdateDTO
+		var updateReq dto.UserUpdateDTO
 		defer cancel()
 
 		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
 
-		if err := c.Bind(&user); err != nil {
+		if err := c.Bind(&updateReq); err != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
 		}
 
-		if validationErr := validate.Struct(user); validationErr != nil {
+		if validationErr := validate.Struct(updateReq); validationErr != nil {
 			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
 			return
 		}
-		updatedAt := time.Now().Unix()
-		update := bson.M{}
-		update["updated_at"] = updatedAt
-		if user.FirstName != nil {
-			update["first_name"] = user.FirstName
-		}
-		if user.LastName != nil {
-			update["last_name"] = user.LastName
+
+		var updateFieldName string
+		switch updateReq.FieldName {
+		case "first_name":
+			updateFieldName = "first_name"
+			break
+		case "last_name":
+			updateFieldName = "last_name"
+			break
+		case "contact_email":
+			updateFieldName = "contact.email"
+			break
+		case "contact_phone":
+			updateFieldName = "contact.phone"
+			break
+		case "contact_facebook":
+			updateFieldName = "contact.facebook"
+			break
 		}
 
-		updateResult, err := userCollection.UpdateOne(
-			ctx,
-			bson.M{"_id": userId},
-			bson.M{"$set": update},
-		)
+		updatedAt := time.Now().Unix()
+		update := bson.M{"updated_at": updatedAt, updateFieldName: updateReq.Value}
+		updateResult, err := userCollection.UpdateOne(ctx, bson.M{"_id": userId}, bson.M{"$set": update})
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})

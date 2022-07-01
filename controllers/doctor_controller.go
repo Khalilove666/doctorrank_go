@@ -7,7 +7,6 @@ import (
 	"doctorrank_go/helpers"
 	"doctorrank_go/models"
 	"doctorrank_go/responses"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,75 +20,202 @@ import (
 
 var doctorCollection *mongo.Collection = configs.GetCollection(configs.DB, "doctors")
 
-func CreateOrUpdateDoctor() gin.HandlerFunc {
+func UpdateDoctor() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var updateReq dto.DoctorUpdateDTO
+		var updateFieldName string
+		var updateFieldValue interface{}
 		defer cancel()
 
 		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
 
-		count, err := doctorCollection.CountDocuments(ctx, bson.M{"user_id": userId})
+		if err := c.BindJSON(&updateReq); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(updateReq); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+		switch updateReq.FieldName {
+		case "profession_id":
+			updateFieldName = "profession_id"
+			updateFieldValue, _ = primitive.ObjectIDFromHex(updateReq.Value)
+			break
+		case "hospital_id":
+			updateFieldName = "hospital_id"
+			updateFieldValue, _ = primitive.ObjectIDFromHex(updateReq.Value)
+			break
+		case "contact_email":
+			updateFieldName = "contact.email"
+			updateFieldValue = updateReq.Value
+			break
+		case "contact_phone":
+			updateFieldName = "contact.phone"
+			updateFieldValue = updateReq.Value
+			break
+		case "contact_facebook":
+			updateFieldName = "contact.facebook"
+			updateFieldValue = updateReq.Value
+			break
+		default:
+			updateFieldName = updateReq.FieldName
+			updateFieldValue = updateReq.Value
+			break
+		}
+
+		updatedAt := time.Now().Unix()
+		result, err := doctorCollection.UpdateOne(
+			ctx,
+			bson.M{"user_id": userId},
+			bson.M{"$set": bson.M{"updated_at": updatedAt, updateFieldName: updateFieldValue}},
+		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
 
-		if count > 0 {
-			var doctor bson.M
-			if err := c.BindJSON(&doctor); err != nil {
-				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
-				return
-			}
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+		return
+	}
+}
 
-			if hospitalId, exist := doctor["hospital_id"].(string); exist {
-				doctor["hospital_id"], _ = primitive.ObjectIDFromHex(hospitalId)
-			}
-			if professionId, exist := doctor["profession_id"].(string); exist {
-				doctor["profession_id"], _ = primitive.ObjectIDFromHex(professionId)
-			}
+func UpdateDoctorExperience() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var updateReq dto.DoctorExperienceUpdateDTO
+		var newExperience models.Experience
+		var update bson.M
+		var filter bson.M
+		defer cancel()
 
-			updatedAt := time.Now().Unix()
-			doctor["updated_at"] = updatedAt
-			result, err := doctorCollection.UpdateOne(
-				ctx,
-				bson.M{"user_id": userId},
-				bson.M{"$set": doctor},
-			)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
-				return
-			}
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
 
-			c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: result})
+		if err := c.BindJSON(&updateReq); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
 			return
-
-		} else {
-			var doctor models.Doctor
-			if err := c.BindJSON(&doctor); err != nil {
-				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
-				return
-			}
-
-			validationErr := validate.Struct(doctor)
-			if validationErr != nil {
-				c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
-				return
-			}
-
-			doctor.Id = primitive.NewObjectID()
-			doctor.UserId = userId
-			doctor.CreatedAt = time.Now().Unix()
-			doctor.UpdatedAt = time.Now().Unix()
-
-			resultInsertionNumber, insertErr := doctorCollection.InsertOne(ctx, doctor)
-			if insertErr != nil {
-				msg := fmt.Sprintf("Error creating doctor item")
-				c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: msg})
-				return
-			}
-
-			c.JSON(http.StatusCreated, responses.Response{Status: http.StatusCreated, Message: "success", Data: resultInsertionNumber})
 		}
+
+		if validationErr := validate.Struct(updateReq); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+		updatedAt := time.Now().Unix()
+
+		switch updateReq.Action {
+		case "create":
+			newExperience.Id = primitive.NewObjectID()
+			newExperience.Profession = updateReq.Value.Profession
+			newExperience.Field = updateReq.Value.Field
+			newExperience.Hospital = updateReq.Value.Hospital
+			newExperience.Country = updateReq.Value.Country
+			newExperience.TermStart = updateReq.Value.TermStart
+			newExperience.TermEnd = updateReq.Value.TermEnd
+			filter = bson.M{"user_id": userId}
+			update = bson.M{"$set": bson.M{"updated_at": updatedAt}, "$push": bson.M{"experience": newExperience}}
+			break
+		case "edit":
+			filter = bson.M{"user_id": userId, "experience._id": updateReq.Id}
+			update = bson.M{"$set": bson.M{"updated_at": updatedAt,
+				"experience.$.profession": updateReq.Value.Profession,
+				"experience.$.field":      updateReq.Value.Field,
+				"experience.$.hospital":   updateReq.Value.Hospital,
+				"experience.$.country":    updateReq.Value.Country,
+				"experience.$.term_start": updateReq.Value.TermStart,
+				"experience.$.term_end":   updateReq.Value.TermEnd,
+			}}
+			break
+		case "delete":
+			filter = bson.M{"user_id": userId}
+			update = bson.M{"$set": bson.M{"updated_at": updatedAt}, "$pull": bson.M{"experience": bson.M{"_id": updateReq.Id}}}
+			break
+		}
+
+		_, err := doctorCollection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		var response primitive.ObjectID
+		if updateReq.Action == "create" {
+			response = newExperience.Id
+		} else {
+			response = updateReq.Id
+		}
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: response})
+		return
+	}
+}
+
+func UpdateDoctorEducation() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var updateReq dto.DoctorEducationUpdateDTO
+		var newEducation models.Education
+		var update bson.M
+		var filter bson.M
+		defer cancel()
+
+		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
+
+		if err := c.BindJSON(&updateReq); err != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: err.Error()})
+			return
+		}
+
+		if validationErr := validate.Struct(updateReq); validationErr != nil {
+			c.JSON(http.StatusBadRequest, responses.Response{Status: http.StatusBadRequest, Message: "error", Data: validationErr.Error()})
+			return
+		}
+		updatedAt := time.Now().Unix()
+
+		switch updateReq.Action {
+		case "create":
+			newEducation.Id = primitive.NewObjectID()
+			newEducation.Degree = updateReq.Value.Degree
+			newEducation.Major = updateReq.Value.Major
+			newEducation.Institution = updateReq.Value.Institution
+			newEducation.Country = updateReq.Value.Country
+			newEducation.TermStart = updateReq.Value.TermStart
+			newEducation.TermEnd = updateReq.Value.TermEnd
+			filter = bson.M{"user_id": userId}
+			update = bson.M{"$set": bson.M{"updated_at": updatedAt}, "$push": bson.M{"education": newEducation}}
+			break
+		case "edit":
+			filter = bson.M{"user_id": userId, "education._id": updateReq.Id}
+			update = bson.M{"$set": bson.M{"updated_at": updatedAt,
+				"education.$.degree":      updateReq.Value.Degree,
+				"education.$.major":       updateReq.Value.Major,
+				"education.$.institution": updateReq.Value.Institution,
+				"education.$.country":     updateReq.Value.Country,
+				"education.$.term_start":  updateReq.Value.TermStart,
+				"education.$.term_end":    updateReq.Value.TermEnd,
+			}}
+			break
+		case "delete":
+			filter = bson.M{"user_id": userId}
+			update = bson.M{"$set": bson.M{"updated_at": updatedAt}, "$pull": bson.M{"education": bson.M{"_id": updateReq.Id}}}
+			break
+		}
+
+		_, err := doctorCollection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
+			return
+		}
+
+		var response primitive.ObjectID
+		if updateReq.Action == "create" {
+			response = newEducation.Id
+		} else {
+			response = updateReq.Id
+		}
+
+		c.JSON(http.StatusOK, responses.Response{Status: http.StatusOK, Message: "success", Data: response})
+		return
 	}
 }
 
@@ -344,6 +470,7 @@ func DoctorBySelf() gin.HandlerFunc {
 		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
 
 		pipeline := []bson.M{
+			{"$match": bson.M{"user_id": userId}},
 			{"$lookup": bson.M{
 				"from":         "professions",
 				"localField":   "profession_id",
@@ -356,8 +483,8 @@ func DoctorBySelf() gin.HandlerFunc {
 				"foreignField": "_id",
 				"as":           "hospital",
 			}},
-			{"$unwind": "$profession"},
-			{"$unwind": "$hospital"},
+			{"$unwind": bson.M{"path": "$profession", "preserveNullAndEmptyArrays": true}},
+			{"$unwind": bson.M{"path": "$hospital", "preserveNullAndEmptyArrays": true}},
 			{"$project": bson.M{
 				"title":           1,
 				"user_id":         1,
@@ -376,7 +503,6 @@ func DoctorBySelf() gin.HandlerFunc {
 				"hospital.name":   1,
 				"hospital.img":    1,
 			}},
-			{"$match": bson.M{"user_id": userId}},
 		}
 		cursor, err := doctorCollection.Aggregate(ctx, pipeline)
 		if err != nil {
@@ -404,7 +530,7 @@ func UploadDoctorAvatar() gin.HandlerFunc {
 		userId, _ := primitive.ObjectIDFromHex(c.GetString("_id"))
 
 		opts := options.FindOne().SetProjection(bson.M{"_id": 1})
-		if err := doctorCollection.FindOne(ctx, bson.M{"user_id": userId}, opts).Decode(doctor); err != nil {
+		if err := doctorCollection.FindOne(ctx, bson.M{"user_id": userId}, opts).Decode(&doctor); err != nil {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
@@ -447,7 +573,6 @@ func UploadDoctorAvatar() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: err.Error()})
 			return
 		}
-
 		_, err = doctorCollection.UpdateOne(
 			ctx,
 			bson.M{"_id": doctorId},

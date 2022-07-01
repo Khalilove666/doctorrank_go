@@ -20,21 +20,23 @@ type Doctor struct {
 }
 
 type Experience struct {
-	Profession string `bson:"profession" json:"profession"`
-	Hospital   string `bson:"hospital" json:"hospital"`
-	Field      string `bson:"field" json:"field"`
-	TermStart  int64  `bson:"term_start" json:"term_start"`
-	TermEnd    int64  `bson:"term_end" json:"term_end"`
-	Country    string `bson:"country" json:"country"`
+	Id         primitive.ObjectID `bson:"_id" json:"_id"`
+	Profession string             `bson:"profession" json:"profession"`
+	Hospital   string             `bson:"hospital" json:"hospital"`
+	Field      string             `bson:"field" json:"field"`
+	TermStart  int64              `bson:"term_start" json:"term_start"`
+	TermEnd    int64              `bson:"term_end" json:"term_end"`
+	Country    string             `bson:"country" json:"country"`
 }
 
 type Education struct {
-	Degree      string `bson:"degree" json:"degree"`
-	Major       string `bson:"major" json:"major"`
-	Institution string `bson:"institution" json:"institution"`
-	TermStart   int64  `bson:"term_start" json:"term_start"`
-	TermEnd     int64  `bson:"term_end" json:"term_end"`
-	Country     string `bson:"country" json:"country"`
+	Id          primitive.ObjectID `bson:"_id" json:"_id"`
+	Degree      string             `bson:"degree" json:"degree"`
+	Major       string             `bson:"major" json:"major"`
+	Institution string             `bson:"institution" json:"institution"`
+	TermStart   int64              `bson:"term_start" json:"term_start"`
+	TermEnd     int64              `bson:"term_end" json:"term_end"`
+	Country     string             `bson:"country" json:"country"`
 }
 type Contact struct {
 	Phone    string `bson:"phone" json:"phone"`
