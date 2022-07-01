@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"mime/multipart"
 )
 
@@ -38,8 +39,39 @@ type PasswordResetDTO struct {
 }
 
 type UserUpdateDTO struct {
-	FirstName *string `bson:"first_name,omitempty" json:"first_name,omitempty"`
-	LastName  *string `bson:"last_name,omitempty" json:"last_name,omitempty"`
+	FieldName string `bson:"field_name" json:"field_name" validate:"required,oneof=first_name last_name contact_email contact_phone contact_facebook"`
+	Value     string `bson:"value" json:"value" validate:"required"`
+}
+
+type DoctorUpdateDTO struct {
+	FieldName string `bson:"field_name" json:"field_name" validate:"required,oneof=title first_name last_name about contact_email contact_phone contact_facebook profession_id hospital_id"`
+	Value     string `bson:"value" json:"value" validate:"required"`
+}
+
+type DoctorExperienceUpdateDTO struct {
+	Action string             `bson:"action" json:"action" validate:"required,oneof=create edit delete"`
+	Id     primitive.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
+	Value  struct {
+		Profession string `bson:"profession" json:"profession"`
+		Hospital   string `bson:"hospital" json:"hospital"`
+		Field      string `bson:"field" json:"field"`
+		TermStart  int64  `bson:"term_start" json:"term_start"`
+		TermEnd    int64  `bson:"term_end" json:"term_end"`
+		Country    string `bson:"country" json:"country"`
+	} `bson:"value" json:"value" validate:"required"`
+}
+
+type DoctorEducationUpdateDTO struct {
+	Action string             `bson:"action" json:"action" validate:"required,oneof=create edit delete"`
+	Id     primitive.ObjectID `bson:"_id" json:"_id"`
+	Value  struct {
+		Degree      string `bson:"degree" json:"degree"`
+		Major       string `bson:"major" json:"major"`
+		Institution string `bson:"institution" json:"institution"`
+		TermStart   int64  `bson:"term_start" json:"term_start"`
+		TermEnd     int64  `bson:"term_end" json:"term_end"`
+		Country     string `bson:"country" json:"country"`
+	} `bson:"value" json:"value" validate:"required"`
 }
 
 type HospitalDTO struct {

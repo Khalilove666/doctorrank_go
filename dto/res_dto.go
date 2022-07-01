@@ -1,6 +1,9 @@
 package dto
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
+import (
+	"doctorrank_go/models"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 type LoginResDTO struct {
 	Id        primitive.ObjectID `bson:"_id" json:"_id"`
@@ -11,6 +14,7 @@ type LoginResDTO struct {
 	Token     string             `bson:"token" json:"token"`
 	Role      string             `bson:"role" json:"role"`
 	Img       string             `bson:"img" json:"img"`
+	Contact   models.UserContact `bson:"contact" json:"contact"`
 	CreatedAt int64              `bson:"created_at" json:"created_at"`
 	UpdatedAt int64              `bson:"updated_at" json:"updated_at"`
 }

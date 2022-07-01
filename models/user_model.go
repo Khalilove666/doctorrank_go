@@ -14,6 +14,13 @@ type User struct {
 	Role           string             `bson:"role" json:"role"`
 	Img            string             `bson:"img" json:"img"`
 	EmailConfirmed bool               `bson:"email_confirmed" json:"email_confirmed"`
+	Contact        UserContact        `bson:"contact" json:"contact"`
 	CreatedAt      int64              `bson:"created_at" json:"created_at"`
 	UpdatedAt      int64              `bson:"updated_at" json:"updated_at"`
+}
+
+type UserContact struct {
+	Phone    string `bson:"phone" json:"phone"`
+	Email    string `bson:"email" json:"email"`
+	Facebook string `bson:"facebook" json:"facebook"`
 }
